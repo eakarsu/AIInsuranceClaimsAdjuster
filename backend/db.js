@@ -168,12 +168,16 @@ async function initDB() {
 
       CREATE TABLE IF NOT EXISTS audit_log (
         id SERIAL PRIMARY KEY,
+        user_id INTEGER,
         user_name VARCHAR(255),
         action VARCHAR(100),
+        table_name VARCHAR(100),
         entity_type VARCHAR(50),
         entity_id INTEGER,
+        record_id INTEGER,
         details TEXT,
         ip_address VARCHAR(50),
+        timestamp TIMESTAMP DEFAULT NOW(),
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);

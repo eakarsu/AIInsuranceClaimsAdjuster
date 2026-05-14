@@ -2,9 +2,14 @@ const router = require('express').Router();
 const { pool } = require('../db');
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'openai/gpt-3.5-turbo';
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'anthropic/claude-3-5-sonnet-20241022';
 
 async function callAI(systemPrompt, userPrompt) {
+  if (!OPENROUTER_API_KEY) {
+    const e = new Error('AI service not configured');
+    e.statusCode = 503;
+    throw e;
+  }
   const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -64,15 +69,47 @@ router.post('/fraud-detection', async (req, res) => {
   }
 });
 
-// POST /damage-assessment
+// POST /damage-assessment (supports vision via image_base64)
 router.post('/damage-assessment', async (req, res) => {
   try {
-    const { claim_id, description, damage_type, location } = req.body;
+    const { claim_id, description, damage_type, location, image_base64, mime_type } = req.body;
 
-    const systemPrompt = 'You are an insurance damage assessment AI. Analyze the damage description and return JSON with: estimated_cost (number), severity (minor/moderate/severe/catastrophic), repair_timeline (string), damage_breakdown (array of {item, cost, priority}), recommendations (array), and detailed_analysis (paragraph).';
-    const userPrompt = `Assess the following damage:\nDamage Type: ${damage_type}\nLocation: ${location}\nDescription: ${description}`;
+    let analysis;
 
-    const analysis = await callAI(systemPrompt, userPrompt);
+    if (image_base64) {
+      // Vision-based assessment
+      const visionResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: OPENROUTER_MODEL,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'image_url', image_url: { url: `data:${mime_type || 'image/jpeg'};base64,${image_base64}` } },
+              { type: 'text', text: `Assess this damage for insurance claim purposes. Context: ${description || ''}. Return JSON only: { "damage_severity": "minor|moderate|severe|total_loss", "estimated_repair_cost": number, "damaged_components": ["string"], "confidence_score": number, "photos_needed": ["string"], "adjuster_notes": "string", "repair_timeline": "string", "detailed_analysis": "string" }` },
+            ],
+          }],
+          temperature: 0.3,
+        }),
+      });
+      const visionData = await visionResponse.json();
+      const content = visionData.choices?.[0]?.message?.content || '{}';
+      try { analysis = JSON.parse(content); } catch (e) {
+        const m = content.match(/\{[\s\S]*\}/);
+        analysis = m ? JSON.parse(m[0]) : { detailed_analysis: content };
+      }
+      // Normalize fields
+      analysis.severity = analysis.damage_severity || analysis.severity || 'moderate';
+      analysis.estimated_cost = analysis.estimated_repair_cost || analysis.estimated_cost || 0;
+    } else {
+      const systemPrompt = 'You are an insurance damage assessment AI. Analyze the damage description and return JSON with: estimated_cost (number), severity (minor/moderate/severe/catastrophic), repair_timeline (string), damage_breakdown (array of {item, cost, priority}), recommendations (array), and detailed_analysis (paragraph).';
+      const userPrompt = `Assess the following damage:\nDamage Type: ${damage_type}\nLocation: ${location}\nDescription: ${description}`;
+      analysis = await callAI(systemPrompt, userPrompt);
+    }
 
     await pool.query(
       'INSERT INTO damage_assessments (claim_id, damage_type, severity, estimated_cost, ai_analysis, repair_timeline) VALUES ($1, $2, $3, $4, $5, $6)',
@@ -347,6 +384,158 @@ router.post('/auto-assign', async (req, res) => {
   } catch (err) {
     console.error('Auto assign error:', err.message);
     res.status(500).json({ error: 'AI analysis failed' });
+  }
+});
+
+// POST /subrogation-optimizer — identify recovery opportunities post-settlement
+router.post('/subrogation-optimizer', async (req, res) => {
+  try {
+    const { claim_id } = req.body;
+    let claim = null;
+    let settlements = [];
+    let documents = [];
+    if (claim_id) {
+      const c = await pool.query('SELECT * FROM claims WHERE id = $1', [claim_id]).catch(() => ({ rows: [] }));
+      if (c.rows.length === 0) return res.status(404).json({ error: 'Claim not found' });
+      claim = c.rows[0];
+      const s = await pool.query('SELECT * FROM settlements WHERE claim_id = $1 ORDER BY id DESC LIMIT 5', [claim_id]).catch(() => ({ rows: [] }));
+      settlements = s.rows;
+      const d = await pool.query('SELECT id, document_type, summary FROM documents WHERE claim_id = $1 LIMIT 20', [claim_id]).catch(() => ({ rows: [] }));
+      documents = d.rows;
+    }
+
+    const systemPrompt = 'You are an insurance subrogation specialist AI. Identify post-settlement recovery opportunities (third-party liability, product defects, medical lien recovery, uninsured motorist, etc.). Return JSON with: opportunities (array of {type, target_party, estimated_recovery_low, estimated_recovery_high, evidence_required, statute_of_limitations_days, success_probability_pct, action_steps}), priority_action (string), expected_total_recovery_range (object with low and high), risk_factors (array of strings), and rationale (paragraph). Always note this is operational guidance, not legal advice.';
+    const userPrompt = `Identify subrogation recovery opportunities.
+
+Claim: ${claim ? JSON.stringify(claim) : 'no claim record loaded; assess generically'}
+Settlements: ${JSON.stringify(settlements)}
+Documents (summaries): ${JSON.stringify(documents)}`;
+
+    const analysis = await callAI(systemPrompt, userPrompt);
+    res.json(analysis);
+  } catch (err) {
+    console.error('Subrogation optimizer error:', err.message);
+    res.status(500).json({ error: 'AI analysis failed' });
+  }
+});
+
+// POST /reserve-estimation — estimate claim reserve adequacy
+router.post('/reserve-estimation', async (req, res) => {
+  try {
+    const { claim_id } = req.body;
+    let claim = null;
+    let damages = [];
+    let payments = [];
+    let policy = null;
+    if (claim_id) {
+      const c = await pool.query('SELECT * FROM claims WHERE id = $1', [claim_id]).catch(() => ({ rows: [] }));
+      if (c.rows.length === 0) return res.status(404).json({ error: 'Claim not found' });
+      claim = c.rows[0];
+      const d = await pool.query('SELECT * FROM damage_assessments WHERE claim_id = $1 ORDER BY id DESC LIMIT 10', [claim_id]).catch(() => ({ rows: [] }));
+      damages = d.rows;
+      const p = await pool.query('SELECT * FROM payments WHERE claim_id = $1', [claim_id]).catch(() => ({ rows: [] }));
+      payments = p.rows;
+      if (claim?.policy_id) {
+        const pol = await pool.query('SELECT * FROM policies WHERE id = $1', [claim.policy_id]).catch(() => ({ rows: [] }));
+        if (pol.rows.length > 0) policy = pol.rows[0];
+      }
+    }
+
+    const systemPrompt = 'You are a property & casualty actuarial AI. Estimate reserve adequacy for an insurance claim. Return JSON with: indicated_reserve_low (number), indicated_reserve_central (number), indicated_reserve_high (number), confidence_0_100 (number), drivers (array of strings), missing_information (array of strings), watchpoints (array of strings), recommended_review_cadence_days (number), case_vs_bulk_assessment (string), and rationale (paragraph). Be conservative when uncertainty is high.';
+    const userPrompt = `Estimate reserve adequacy.
+
+Claim: ${claim ? JSON.stringify(claim) : 'no claim record loaded'}
+Damage assessments: ${JSON.stringify(damages)}
+Payments to date: ${JSON.stringify(payments)}
+Policy context: ${policy ? JSON.stringify(policy) : 'unknown'}`;
+
+    const analysis = await callAI(systemPrompt, userPrompt);
+    res.json(analysis);
+  } catch (err) {
+    console.error('Reserve estimation error:', err.message);
+    res.status(500).json({ error: 'AI analysis failed' });
+  }
+});
+
+// helper: send 503 vs 500 consistently
+function aiErr(res, err, label) {
+  if (err && err.statusCode === 503) return res.status(503).json({ error: 'AI service unavailable: missing API key', message: 'OPENROUTER_API_KEY is not configured' });
+  console.error(`${label} error:`, err.message);
+  return res.status(500).json({ error: 'AI analysis failed' });
+}
+
+// POST /predictive-settlement-optimization — multi-scenario settlement strategy
+router.post('/predictive-settlement-optimization', async (req, res) => {
+  try {
+    const { claim_id, target_outcome } = req.body || {};
+    let claim = null, damages = [], payments = [], policy = null;
+    if (claim_id) {
+      const c = await pool.query('SELECT * FROM claims WHERE id = $1', [claim_id]).catch(() => ({ rows: [] }));
+      if (c.rows.length === 0) return res.status(404).json({ error: 'Claim not found' });
+      claim = c.rows[0];
+      const d = await pool.query('SELECT * FROM damage_assessments WHERE claim_id = $1 LIMIT 10', [claim_id]).catch(() => ({ rows: [] }));
+      damages = d.rows;
+      const p = await pool.query('SELECT * FROM payments WHERE claim_id = $1', [claim_id]).catch(() => ({ rows: [] }));
+      payments = p.rows;
+      if (claim?.policy_id) {
+        const pol = await pool.query('SELECT * FROM policies WHERE id = $1', [claim.policy_id]).catch(() => ({ rows: [] }));
+        if (pol.rows.length > 0) policy = pol.rows[0];
+      }
+    }
+    const systemPrompt = 'You are an insurance settlement strategy AI. Generate predictive settlement scenarios. Return JSON with: scenarios (array of {name, settlement_amount, probability_pct, time_to_close_days, rationale, risks}), recommended_scenario (string), expected_value (number), litigation_risk_pct (number), negotiation_levers (array of strings), and rationale (paragraph).';
+    const userPrompt = `Optimize settlement strategy.\n\nTarget outcome: ${target_outcome || 'minimize cost while preserving customer satisfaction'}\nClaim: ${claim ? JSON.stringify(claim) : 'unspecified'}\nDamage assessments: ${JSON.stringify(damages)}\nPayments: ${JSON.stringify(payments)}\nPolicy: ${policy ? JSON.stringify(policy) : 'unknown'}`;
+    const analysis = await callAI(systemPrompt, userPrompt);
+    res.json(analysis);
+  } catch (err) {
+    aiErr(res, err, 'Predictive settlement');
+  }
+});
+
+// POST /adjuster-workload-balancing — rebalance assignments across adjusters
+router.post('/adjuster-workload-balancing', async (req, res) => {
+  try {
+    const { open_claims, balancing_goal } = req.body || {};
+    let adjusters = [];
+    let claims = open_claims || [];
+    try {
+      const a = await pool.query('SELECT id, name, specialization, current_workload FROM adjusters').catch(() => ({ rows: [] }));
+      adjusters = a.rows;
+    } catch (_) { /* ignore */ }
+    if (!Array.isArray(claims) || claims.length === 0) {
+      try {
+        const c = await pool.query("SELECT id, claim_type, severity, status FROM claims WHERE status IN ('open','in_review','assigned') LIMIT 50").catch(() => ({ rows: [] }));
+        claims = c.rows;
+      } catch (_) { /* ignore */ }
+    }
+    const systemPrompt = 'You are an insurance operations AI for adjuster workload balancing. Return JSON with: rebalancing_plan (array of {claim_id, current_adjuster, recommended_adjuster, reason, urgency}), workload_distribution (object map adjuster->expected_open_claims), bottlenecks (array of strings), capacity_warnings (array of strings), and rationale (paragraph). Respect specialization and severity.';
+    const userPrompt = `Balance workload.\nGoal: ${balancing_goal || 'even distribution while honoring specialization & SLA'}\nAdjusters: ${JSON.stringify(adjusters)}\nOpen claims: ${JSON.stringify(claims)}`;
+    const analysis = await callAI(systemPrompt, userPrompt);
+    res.json(analysis);
+  } catch (err) {
+    aiErr(res, err, 'Workload balancing');
+  }
+});
+
+// POST /customer-ltv-retention — post-claim customer LTV & retention strategy
+router.post('/customer-ltv-retention', async (req, res) => {
+  try {
+    const { customer_id } = req.body || {};
+    let customer = null, claims = [], policies = [];
+    if (customer_id) {
+      const cu = await pool.query('SELECT * FROM customers WHERE id = $1', [customer_id]).catch(() => ({ rows: [] }));
+      if (cu.rows.length === 0) return res.status(404).json({ error: 'Customer not found' });
+      customer = cu.rows[0];
+      const cl = await pool.query('SELECT id, claim_type, status, claim_amount FROM claims WHERE customer_id = $1 ORDER BY id DESC LIMIT 20', [customer_id]).catch(() => ({ rows: [] }));
+      claims = cl.rows;
+      const po = await pool.query('SELECT id, policy_type, premium, start_date, end_date FROM policies WHERE customer_id = $1', [customer_id]).catch(() => ({ rows: [] }));
+      policies = po.rows;
+    }
+    const systemPrompt = 'You are a customer retention AI for insurance. Return JSON with: ltv_estimate_usd (number), churn_risk_pct (number), retention_strategy (array of {action, rationale, priority}), upsell_opportunities (array of {product, fit_score, expected_premium}), nps_signal (string), risk_indicators (array of strings), and rationale (paragraph).';
+    const userPrompt = `Assess post-claim LTV & retention.\nCustomer: ${customer ? JSON.stringify(customer) : 'unspecified'}\nClaims history: ${JSON.stringify(claims)}\nPolicies: ${JSON.stringify(policies)}`;
+    const analysis = await callAI(systemPrompt, userPrompt);
+    res.json(analysis);
+  } catch (err) {
+    aiErr(res, err, 'Customer LTV');
   }
 });
 

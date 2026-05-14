@@ -284,23 +284,26 @@ export default function AISidebar({ isOpen, onClose }) {
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [rateLimited, setRateLimited] = useState(false)
+  const [uploadedPhoto, setUploadedPhoto] = useState(null) // { base64, mime_type, name }
   const [refData, setRefData] = useState({ claims: [], policies: [], customers: [], adjusters: [], documents: [] })
 
   useEffect(() => {
     if (isOpen) {
+      const extract = (d) => Array.isArray(d) ? d : (d?.data || [])
       Promise.all([
-        fetchItems('claims').catch(() => []),
+        fetchItems('claims?page=1&limit=100').catch(() => []),
         fetchItems('policies').catch(() => []),
-        fetchItems('customers').catch(() => []),
+        fetchItems('customers?page=1&limit=100').catch(() => []),
         fetchItems('adjusters').catch(() => []),
         fetchItems('documents').catch(() => []),
       ]).then(([claims, policies, customers, adjusters, documents]) => {
         setRefData({
-          claims: Array.isArray(claims) ? claims : [],
-          policies: Array.isArray(policies) ? policies : [],
-          customers: Array.isArray(customers) ? customers : [],
-          adjusters: Array.isArray(adjusters) ? adjusters : [],
-          documents: Array.isArray(documents) ? documents : [],
+          claims: extract(claims),
+          policies: extract(policies),
+          customers: extract(customers),
+          adjusters: extract(adjusters),
+          documents: extract(documents),
         })
       })
     }
@@ -311,12 +314,28 @@ export default function AISidebar({ isOpen, onClose }) {
     setFormData({})
     setResult(null)
     setError('')
+    setRateLimited(false)
+    setUploadedPhoto(null)
   }
 
   const handleBack = () => {
     setSelectedTool(null)
     setResult(null)
     setError('')
+    setRateLimited(false)
+    setUploadedPhoto(null)
+  }
+
+  const handlePhotoUpload = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const dataUrl = ev.target.result
+      const base64 = dataUrl.split(',')[1]
+      setUploadedPhoto({ base64, mime_type: file.type, name: file.name })
+    }
+    reader.readAsDataURL(file)
   }
 
   const handleChange = (key, value) => {
@@ -328,6 +347,7 @@ export default function AISidebar({ isOpen, onClose }) {
     setLoading(true)
     setError('')
     setResult(null)
+    setRateLimited(false)
     try {
       const cleaned = { ...formData }
       selectedTool.fields.forEach(f => {
@@ -335,10 +355,23 @@ export default function AISidebar({ isOpen, onClose }) {
           cleaned[f.key] = Number(cleaned[f.key])
         }
       })
+      // Attach photo for damage-assessment
+      if (selectedTool.id === 'damage-assessment' && uploadedPhoto) {
+        cleaned.image_base64 = uploadedPhoto.base64
+        cleaned.mime_type = uploadedPhoto.mime_type
+      }
       const res = await runAI(selectedTool.id, cleaned)
-      setResult(res)
+      if (res?.error && (res.error.includes('rate limit') || res.error.includes('429'))) {
+        setRateLimited(true)
+      } else {
+        setResult(res)
+      }
     } catch (err) {
-      setError(err.message)
+      if (err.message?.includes('429') || err.message?.toLowerCase().includes('rate limit')) {
+        setRateLimited(true)
+      } else {
+        setError(err.message)
+      }
     } finally {
       setLoading(false)
     }
@@ -403,6 +436,23 @@ export default function AISidebar({ isOpen, onClose }) {
               )}
 
               <form onSubmit={handleSubmit} className="ai-sidebar-form">
+                {selectedTool.id === 'damage-assessment' && (
+                  <div className="form-group">
+                    <label>Photo Upload (optional — enables vision AI)</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="form-input"
+                      style={{ padding: '6px' }}
+                      onChange={handlePhotoUpload}
+                    />
+                    {uploadedPhoto && (
+                      <div style={{ marginTop: 6, fontSize: 12, color: '#38a169', fontWeight: 600 }}>
+                        Photo ready: {uploadedPhoto.name} — Vision AI will be used
+                      </div>
+                    )}
+                  </div>
+                )}
                 {selectedTool.fields.map(field => (
                   <div key={field.key} className="form-group">
                     <label>{field.label}</label>
@@ -480,8 +530,73 @@ export default function AISidebar({ isOpen, onClose }) {
                 </div>
               )}
 
+              {rateLimited && (
+                <div style={{ background: '#fff3cd', border: '1px solid #ffc107', color: '#856404', padding: '12px 16px', borderRadius: 8, marginTop: 12, fontSize: 13 }}>
+                  AI rate limit exceeded (20 requests/hour). Please wait before making another request.
+                </div>
+              )}
               {error && <div className="error-message">{error}</div>}
-              {result && <AIResultDisplay result={result} />}
+
+              {/* Structured damage assessment display */}
+              {result && selectedTool.id === 'damage-assessment' && (result.damage_severity || result.severity || result.estimated_repair_cost || result.estimated_cost) ? (
+                <div style={{ marginTop: 16 }}>
+                  <div style={{ background: '#f7fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: 16 }}>
+                    <h4 style={{ marginBottom: 12, fontSize: 15, fontWeight: 700 }}>Damage Assessment Results</h4>
+                    {(result.damage_severity || result.severity) && (
+                      <div style={{ marginBottom: 10 }}>
+                        <span style={{ fontWeight: 600, fontSize: 13 }}>Severity: </span>
+                        <span style={{
+                          padding: '3px 10px', borderRadius: 12, fontSize: 13, fontWeight: 700,
+                          background: { minor: '#c6f6d5', moderate: '#fefcbf', severe: '#fed7d7', total_loss: '#feb2b2', catastrophic: '#fed7d7' }[result.damage_severity || result.severity] || '#e2e8f0',
+                          color: { minor: '#276749', moderate: '#744210', severe: '#9b2c2c', total_loss: '#742a2a', catastrophic: '#9b2c2c' }[result.damage_severity || result.severity] || '#4a5568',
+                        }}>
+                          {(result.damage_severity || result.severity || '').replace(/_/g, ' ').toUpperCase()}
+                        </span>
+                      </div>
+                    )}
+                    {(result.estimated_repair_cost || result.estimated_cost) !== undefined && (
+                      <div style={{ marginBottom: 10 }}>
+                        <span style={{ fontWeight: 600, fontSize: 13 }}>Estimated Cost: </span>
+                        <span style={{ fontSize: 15, fontWeight: 700, color: '#2d3748' }}>${Number(result.estimated_repair_cost || result.estimated_cost || 0).toLocaleString()}</span>
+                      </div>
+                    )}
+                    {(result.damaged_components || result.damage_breakdown) && (
+                      <div style={{ marginBottom: 10 }}>
+                        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>Damaged Components:</div>
+                        <ul style={{ margin: 0, paddingLeft: 18 }}>
+                          {(result.damaged_components || (result.damage_breakdown || []).map(d => d.item || d)).map((item, i) => (
+                            <li key={i} style={{ fontSize: 13 }}>{typeof item === 'string' ? item : JSON.stringify(item)}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {result.confidence_score !== undefined && (
+                      <div style={{ marginBottom: 10 }}>
+                        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>Confidence Score: {result.confidence_score}%</div>
+                        <div style={{ background: '#e2e8f0', borderRadius: 4, height: 8, overflow: 'hidden' }}>
+                          <div style={{ width: `${result.confidence_score}%`, background: result.confidence_score >= 70 ? '#38a169' : '#d69e2e', height: '100%' }} />
+                        </div>
+                      </div>
+                    )}
+                    {result.photos_needed && result.photos_needed.length > 0 && (
+                      <div style={{ marginBottom: 10 }}>
+                        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>Photos Needed:</div>
+                        <ul style={{ margin: 0, paddingLeft: 18 }}>
+                          {result.photos_needed.map((p, i) => <li key={i} style={{ fontSize: 13 }}>{p}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                    {(result.adjuster_notes || result.detailed_analysis) && (
+                      <div style={{ marginTop: 8, padding: '10px 12px', background: '#ebf8ff', borderRadius: 6 }}>
+                        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>Adjuster Notes:</div>
+                        <p style={{ fontSize: 13, margin: 0, color: '#2c5282' }}>{result.adjuster_notes || result.detailed_analysis}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : result ? (
+                <AIResultDisplay result={result} />
+              ) : null}
             </div>
           )}
         </div>
