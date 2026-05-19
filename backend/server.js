@@ -3,6 +3,7 @@ require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') }
 const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
+const { ipKeyGenerator } = require('express-rate-limit');
 const { initDB, pool } = require('./db');
 
 // === Batch 04 Gaps & Frontend Mounts ===
@@ -29,9 +30,8 @@ const aiRateLimiter = rateLimit({
   max: 20,
   keyGenerator: (req) => {
     if (req.user?.id) return String(req.user.id);
-    // Normalize IPv6 to prevent bypass
     const ip = req.ip || req.socket?.remoteAddress || 'unknown';
-    return ip.startsWith('::ffff:') ? ip.slice(7) : ip;
+    return ipKeyGenerator(ip);
   },
   validate: { xForwardedForHeader: false },
   handler: (req, res) => res.status(429).json({ error: 'AI rate limit exceeded. Maximum 20 requests per hour.' }),
@@ -76,6 +76,9 @@ app.use('/api/reinsurance', require('./routes/reinsurance'));
 app.use('/api/integrations', require('./routes/integrations'));
 app.use('/api/cv-damage', require('./routes/cvDamageEstimator'));
 app.use('/api/fraud-ring', require('./routes/fraudRingDetection'));
+
+// Custom Views — 2 VIZ + 2 NON-VIZ — mounted BEFORE the 404 catch-all
+app.use('/api/custom-views', require('./routes/customViews'));
 
 // Health check
 app.get('/api/health', (req, res) => {

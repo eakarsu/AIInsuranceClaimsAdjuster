@@ -8,6 +8,7 @@ import AdvancedAITools from './pages/AdvancedAITools.jsx'
 import Pass5Tools from './pages/Pass5Tools.jsx'
 import AISidebar from './components/AISidebar.jsx'
 import { features } from './pages/features.js'
+import CustomViewsPage from './pages/CustomViewsPage.jsx'
 
 // === Batch 04 Gaps & Frontend Mounts ===
 import CfAgenticClaimsTriageAutoRoutingBy from './pages/CfAgenticClaimsTriageAutoRoutingBy';
@@ -55,6 +56,7 @@ function Navbar({ onToggleAI }) {
         <Link to="/claims" className="navbar-link">Claims</Link>
         <Link to="/policies" className="navbar-link">Policies</Link>
         <Link to="/reports" className="navbar-link">Reports</Link>
+        <Link to="/custom-views" className="navbar-link" data-testid="nav-claims-views">Claims Views</Link>
         <Link to="/advanced-ai" className="navbar-link">Advanced AI</Link>
         <button onClick={onToggleAI} className="btn btn-ai-nav">🤖 AI Assistant</button>
         <button onClick={handleLogout} className="btn btn-logout">Logout</button>
@@ -89,6 +91,7 @@ function AppContent() {
         <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
         <Route path="/advanced-ai" element={<ProtectedRoute><AdvancedAITools /></ProtectedRoute>} />
         <Route path="/pass5-tools" element={<ProtectedRoute><Pass5Tools /></ProtectedRoute>} />
+        <Route path="/custom-views" element={<ProtectedRoute><CustomViewsPage /></ProtectedRoute>} />
       
           {/* // === Batch 04 Gaps & Frontend Mounts === */}
           <Route path="/cf-agentic-claims-triage-auto-routing-by" element={<CfAgenticClaimsTriageAutoRoutingBy />} />
