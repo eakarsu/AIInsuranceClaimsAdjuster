@@ -3,8 +3,41 @@ const { pool } = require('../db');
 
 router.get('/', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM audit_log ORDER BY created_at DESC');
-    res.json(result.rows);
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 50));
+    const offset = (page - 1) * limit;
+
+    const conditions = [];
+    const params = [];
+    let paramIdx = 1;
+
+    if (req.query.action) {
+      conditions.push(`action ILIKE $${paramIdx++}`);
+      params.push(`%${req.query.action}%`);
+    }
+    if (req.query.entity_type) {
+      conditions.push(`(entity_type ILIKE $${paramIdx++} OR table_name ILIKE $${paramIdx - 1})`);
+      params.push(`%${req.query.entity_type}%`);
+    }
+    if (req.query.date_from) {
+      conditions.push(`created_at >= $${paramIdx++}`);
+      params.push(req.query.date_from);
+    }
+    if (req.query.date_to) {
+      conditions.push(`created_at <= $${paramIdx++}`);
+      params.push(req.query.date_to);
+    }
+
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const countResult = await pool.query(`SELECT COUNT(*) FROM audit_log ${where}`, params);
+    const total = parseInt(countResult.rows[0].count);
+
+    const result = await pool.query(
+      `SELECT * FROM audit_log ${where} ORDER BY created_at DESC LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
+      [...params, limit, offset]
+    );
+
+    res.json({ data: result.rows, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
   } catch (err) {
     console.error('Error fetching audit log:', err.message);
     res.status(500).json({ error: 'Server error' });
