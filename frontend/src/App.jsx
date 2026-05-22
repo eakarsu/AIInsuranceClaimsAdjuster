@@ -9,6 +9,7 @@ import Pass5Tools from './pages/Pass5Tools.jsx'
 import AISidebar from './components/AISidebar.jsx'
 import { features } from './pages/features.js'
 import CustomViewsPage from './pages/CustomViewsPage.jsx'
+import ClaimSeverityLeakageAudit from './pages/ClaimSeverityLeakageAudit.jsx'
 
 // === Batch 04 Gaps & Frontend Mounts ===
 import CfAgenticClaimsTriageAutoRoutingBy from './pages/CfAgenticClaimsTriageAutoRoutingBy';
@@ -26,6 +27,11 @@ import GapNoMobilePushNotificationsForField from './pages/GapNoMobilePushNotific
 import GapNoESignatureForSettlements from './pages/GapNoESignatureForSettlements';
 import GapNoNotificationsModule0References from './pages/GapNoNotificationsModule0References';
 import GapNoWebsocketRealTimeClaimFeed from './pages/GapNoWebsocketRealTimeClaimFeed';
+
+import CodexCustomVizFeature from './pages/CodexCustomVizFeature';
+import CodexOperationsFeature from './pages/CodexOperationsFeature';
+
+import TimelineView from './pages/TimelineView';
 
 function ProtectedRoute({ children }) {
   const token = localStorage.getItem('token')
@@ -72,6 +78,10 @@ function AppContent() {
     <>
       <Navbar onToggleAI={() => setAISidebarOpen(true)} />
       <Routes>
+        <Route path="/insights/timeline" element={<ProtectedRoute><TimelineView /></ProtectedRoute>} />
+        <Route path="/codex/custom-viz" element={<ProtectedRoute><CodexCustomVizFeature /></ProtectedRoute>} />
+        <Route path="/codex/operations" element={<ProtectedRoute><CodexOperationsFeature /></ProtectedRoute>} />
+
         <Route path="/login" element={<Login />} />
         <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/claims" element={<ProtectedRoute><FeaturePage config={features.claims} /></ProtectedRoute>} />
@@ -92,6 +102,7 @@ function AppContent() {
         <Route path="/advanced-ai" element={<ProtectedRoute><AdvancedAITools /></ProtectedRoute>} />
         <Route path="/pass5-tools" element={<ProtectedRoute><Pass5Tools /></ProtectedRoute>} />
         <Route path="/custom-views" element={<ProtectedRoute><CustomViewsPage /></ProtectedRoute>} />
+        <Route path="/claim-severity-leakage-audit" element={<ProtectedRoute><ClaimSeverityLeakageAudit /></ProtectedRoute>} />
       
           {/* // === Batch 04 Gaps & Frontend Mounts === */}
           <Route path="/cf-agentic-claims-triage-auto-routing-by" element={<CfAgenticClaimsTriageAutoRoutingBy />} />

@@ -76,6 +76,7 @@ app.use('/api/reinsurance', require('./routes/reinsurance'));
 app.use('/api/integrations', require('./routes/integrations'));
 app.use('/api/cv-damage', require('./routes/cvDamageEstimator'));
 app.use('/api/fraud-ring', require('./routes/fraudRingDetection'));
+app.use('/api/claim-severity-leakage-audit', require('./routes/claimSeverityLeakageAudit'));
 
 // Custom Views — 2 VIZ + 2 NON-VIZ — mounted BEFORE the 404 catch-all
 app.use('/api/custom-views', require('./routes/customViews'));
