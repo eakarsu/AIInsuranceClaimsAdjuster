@@ -10,6 +10,8 @@ import AISidebar from './components/AISidebar.jsx'
 import { features } from './pages/features.js'
 import CustomViewsPage from './pages/CustomViewsPage.jsx'
 import ClaimSeverityLeakageAudit from './pages/ClaimSeverityLeakageAudit.jsx'
+import MissingFeaturesHub from './pages/MissingFeaturesHub';
+import ProductionReadiness from './pages/ProductionReadiness';
 
 // === Batch 04 Gaps & Frontend Mounts ===
 import CfAgenticClaimsTriageAutoRoutingBy from './pages/CfAgenticClaimsTriageAutoRoutingBy';
@@ -120,7 +122,9 @@ function AppContent() {
           <Route path="/gap-no-e-signature-for-settlements" element={<GapNoESignatureForSettlements />} />
           <Route path="/gap-no-notifications-module-0-references" element={<GapNoNotificationsModule0References />} />
           <Route path="/gap-no-websocket-real-time-claim-feed" element={<GapNoWebsocketRealTimeClaimFeed />} />
-</Routes>
+        <Route path="/missing-features" element={<ProtectedRoute><MissingFeaturesHub /></ProtectedRoute>} />
+              <Route path="/production-readiness" element={<ProtectedRoute><ProductionReadiness /></ProtectedRoute>} />
+      </Routes>
 
       <AISidebar isOpen={aiSidebarOpen} onClose={() => setAISidebarOpen(false)} />
 
