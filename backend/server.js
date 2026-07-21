@@ -4,7 +4,7 @@ const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const { ipKeyGenerator } = require('express-rate-limit');
-const { initDB, pool } = require('./db');
+const { pool } = require('./db');
 
 // === Batch 04 Gaps & Frontend Mounts ===
 const route_gap_no_subrogation_recovery_optimizer = require('./routes/gap-no-subrogation-recovery-optimizer');
@@ -77,6 +77,7 @@ app.use('/api/integrations', require('./routes/integrations'));
 app.use('/api/cv-damage', require('./routes/cvDamageEstimator'));
 app.use('/api/fraud-ring', require('./routes/fraudRingDetection'));
 app.use('/api/claim-severity-leakage-audit', require('./routes/claimSeverityLeakageAudit'));
+app.use('/api/governed-claims', require('./middleware/auth'), require('./routes/governedClaims'));
 
 // Custom Views — 2 VIZ + 2 NON-VIZ — mounted BEFORE the 404 catch-all
 app.use('/api/custom-views', require('./routes/customViews'));
@@ -86,10 +87,6 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Initialize database and start server
-initDB()
-  .then(() => {
-    
 app.use('/api/gap-no-subrogation-recovery-optimizer', route_gap_no_subrogation_recovery_optimizer);
 app.use('/api/gap-no-reserve-estimation-ai', route_gap_no_reserve_estimation_ai);
 app.use('/api/gap-no-litigation-outcome-predictor', route_gap_no_litigation_outcome_predictor);
@@ -101,12 +98,7 @@ app.use('/api/gap-no-notifications-module-0-references', route_gap_no_notificati
 app.use('/api/gap-no-websocket-real-time-claim-feed', route_gap_no_websocket_real_time_claim_feed);
 
 app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
-    });
-  })
-  .catch((err) => {
-    console.error('Failed to initialize database:', err.message);
-    process.exit(1);
-  });
+  console.log(`Server running on port ${PORT}`);
+});
 
 module.exports = app;

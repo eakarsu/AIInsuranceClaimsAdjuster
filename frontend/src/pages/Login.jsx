@@ -24,11 +24,6 @@ export default function Login() {
     }
   }
 
-  const handleAutoFill = () => {
-    setEmail('admin@insurance.com')
-    setPassword('password123')
-  }
-
   return (
     <div className="login-page">
       <div className="login-card">
@@ -63,9 +58,6 @@ export default function Login() {
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
-        <button onClick={handleAutoFill} className="auto-fill-btn">
-          Auto-Fill Credentials
-        </button>
       </div>
     </div>
   )

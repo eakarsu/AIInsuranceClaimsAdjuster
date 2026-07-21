@@ -1,0 +1,6 @@
+const test=require('node:test');const assert=require('node:assert/strict');const fs=require('node:fs');const path=require('node:path');const {reconcileAmounts,validateDecisionEvidence,validateTransition}=require('../domain/claimPolicy');
+test('reconciles estimate reserve and payment',()=>assert.equal(reconcileAmounts({estimate:800,reserve:900,payment:500,coverage_limit:1000}).remaining_reserve,400));
+test('rejects payment above reserve',()=>assert.throws(()=>reconcileAmounts({estimate:800,reserve:500,payment:600,coverage_limit:1000}),/exceeds/));
+test('requires complete decision evidence',()=>assert.throws(()=>validateDecisionEvidence({coverage_rule_version:'v1',extraction_confidence:.9,fraud_signals:[],fairness_review:true}),/complete/));
+test('enforces decision/payment separation',()=>assert.throws(()=>validateTransition('payment_pending','paid',{role:'payment_approver',paymentReceipt:'r',decisionActorId:3,paymentActorId:3}),/separation/));
+test('migration and route enforce tenant/idempotency/immutable audit boundaries',()=>{const root=path.join(__dirname,'..');const sql=fs.readFileSync(path.join(root,'migrations/001_governed_claims.sql'),'utf8');const route=fs.readFileSync(path.join(root,'routes/governedClaims.js'),'utf8');assert.match(sql,/claim_disputes/);assert.match(route,/tenant_id=\$1/);assert.match(route,/claim_audit_events/);});

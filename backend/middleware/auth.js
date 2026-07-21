@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'insurance_jwt_secret_2024';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) throw new Error('JWT_SECRET is required');
 
 function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;

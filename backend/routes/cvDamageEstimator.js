@@ -2,7 +2,6 @@
 // estimation.
 // Audit: batch_04.md / AIInsuranceClaimsAdjuster / Custom Feature Suggestions #2
 const express = require('express');
-const fetch = require('node-fetch');
 const authMiddleware = require('../middleware/auth');
 const { pool } = require('../db');
 
