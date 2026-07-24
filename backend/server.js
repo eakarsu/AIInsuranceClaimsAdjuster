@@ -21,7 +21,7 @@ const PORT = process.env.PORT || 3001;
 
 // Security
 app.use(require('helmet')());
-app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173', credentials: true }));
+app.use(cors({ origin: process.env.CORS_ORIGIN || process.env.CLIENT_URL || 'http://localhost:5173', credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 
 // AI rate limiter: 20 requests per hour per user/IP
@@ -67,7 +67,7 @@ app.use('/api/settlements', require('./routes/settlements'));
 app.use('/api/documents', require('./routes/documents'));
 app.use('/api/communications', require('./routes/communications'));
 app.use('/api/audit-log', require('./routes/auditLog'));
-app.use('/api/ai', aiRateLimiter, require('./routes/ai'));
+app.use('/api/ai', require('./middleware/auth'), aiRateLimiter, require('./routes/ai'));
 app.use('/api/reports', require('./routes/reports'));
 // Apply pass 5 — additive
 app.use('/api/customer-portal', require('./routes/customerPortal'));
