@@ -96,6 +96,7 @@ app.use('/api/gap-no-mobile-push-notifications-for-field', route_gap_no_mobile_p
 app.use('/api/gap-no-e-signature-for-settlements', route_gap_no_e_signature_for_settlements);
 app.use('/api/gap-no-notifications-module-0-references', route_gap_no_notifications_module_0_references);
 app.use('/api/gap-no-websocket-real-time-claim-feed', route_gap_no_websocket_real_time_claim_feed);
+app.use('/api', require('./routes/generatedFeatures').router);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
