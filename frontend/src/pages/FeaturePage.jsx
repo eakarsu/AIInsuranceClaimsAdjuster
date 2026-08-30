@@ -200,12 +200,15 @@ function DetailModal({ item, config, onClose, onEdit, onDelete }) {
               )
             })}
           </div>
-          {!config.readOnly && (
-            <div className="detail-actions">
+          <div className="detail-actions">
+            {!config.readOnly && (
+              <>
               <button className="btn btn-primary" onClick={() => onEdit(item)}>Edit</button>
               <button className="btn btn-danger" onClick={() => onDelete(item)}>Delete</button>
-            </div>
-          )}
+              </>
+            )}
+            <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+          </div>
         </div>
       </div>
     </div>
