@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { fetchItems } from '../services/api.js'
+import { fetchItems, recordRows } from '../services/api.js'
 
 function token() { return localStorage.getItem('token') }
 
@@ -15,7 +15,7 @@ export default function SettlementLetterPDF() {
 
   useEffect(() => {
     fetchItems('claims?page=1&limit=100')
-      .then(d => setClaims(Array.isArray(d) ? d : (d?.data || [])))
+      .then(d => setClaims(recordRows(d)))
       .catch(() => setClaims([]))
   }, [])
 

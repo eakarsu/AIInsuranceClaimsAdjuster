@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import AIResultDisplay from './AIResultDisplay.jsx'
 import { runAI, fetchItems } from '../services/api.js'
+import { fillNativeAiPreset } from './nativeAiPresets.js'
 
 const aiTools = [
   {
@@ -286,11 +287,12 @@ export default function AISidebar({ isOpen, onClose }) {
   const [error, setError] = useState('')
   const [rateLimited, setRateLimited] = useState(false)
   const [uploadedPhoto, setUploadedPhoto] = useState(null) // { base64, mime_type, name }
+  const [presetNotice, setPresetNotice] = useState('')
   const [refData, setRefData] = useState({ claims: [], policies: [], customers: [], adjusters: [], documents: [] })
 
   useEffect(() => {
     if (isOpen) {
-      const extract = (d) => Array.isArray(d) ? d : (d?.data || [])
+      const extract = (d) => Array.isArray(d) ? d : (Array.isArray(d?.data) ? d.data : [])
       Promise.all([
         fetchItems('claims?page=1&limit=100').catch(() => []),
         fetchItems('policies').catch(() => []),
@@ -427,13 +429,18 @@ export default function AISidebar({ isOpen, onClose }) {
                       key={idx}
                       type="button"
                       className="btn btn-sample"
-                      onClick={() => setFormData({ ...sample.data })}
+                      onClick={() => {
+                        const filled = fillNativeAiPreset(selectedTool.fields, sample.data, formData, refData, idx)
+                        setFormData(filled.values)
+                        setPresetNotice(filled.missing.length ? `Select a real ${filled.missing.join(', ')} before running this analysis.` : 'Example filled. Review before running. Uploaded files remain selected.')
+                      }}
                     >
                       {sample.name}
                     </button>
                   ))}
                 </div>
               )}
+              {presetNotice && <p role="status">{presetNotice}</p>}
 
               <form onSubmit={handleSubmit} className="ai-sidebar-form">
                 {selectedTool.id === 'damage-assessment' && (

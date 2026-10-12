@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import AIResultDisplay from '../components/AIResultDisplay.jsx'
 import { runAI, fetchItems } from '../services/api.js'
+import { fillNativeAiPreset } from '../components/nativeAiPresets.js'
 
 const TOOLS = [
   {
@@ -57,6 +58,8 @@ export default function AdvancedAITools() {
   const [tab, setTab] = useState(TOOLS[0].id)
   const [forms, setForms] = useState({})
   const [claims, setClaims] = useState([])
+  const [customers, setCustomers] = useState([])
+  const [presetNotice, setPresetNotice] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [result, setResult] = useState(null)
@@ -65,7 +68,8 @@ export default function AdvancedAITools() {
   const formData = forms[tab] || {}
 
   useEffect(() => {
-    fetchItems('claims').then((data) => setClaims(Array.isArray(data) ? data : data?.data || [])).catch(() => setClaims([]))
+    fetchItems('claims').then((data) => setClaims(Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []))).catch(() => setClaims([]))
+    fetchItems('customers').then((data) => setCustomers(Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []))).catch(() => setCustomers([]))
   }, [])
 
   const setField = (name, value) => {
@@ -130,6 +134,22 @@ export default function AdvancedAITools() {
         <p style={{ color: '#64748b' }}>{tool.desc}</p>
 
         <form onSubmit={submit}>
+          <div className="ai-sample-buttons">
+            <span className="ai-sample-label">Fill example:</span>
+            {['Initial review', 'Complex case', 'Follow-up review'].map((label, index) => <button key={label} type="button" className="btn btn-sample" disabled={loading} onClick={() => {
+              const samples = {
+                notes: ['Liability is disputed. Confirm the police report, witness statements, and recovery target.', 'Multiple parties may share fault. Review coverage, evidence gaps, and recovery timing.', 'Review new repair invoices and the adverse carrier response before estimating recovery.'],
+                target_outcome: ['Resolve fairly within coverage and document the rationale.', 'Compare settlement scenarios, costs, and litigation exposure.', 'Update the recommendation after medical and repair evidence arrives.'],
+                balancing_goal: ['Balance open claims by capacity and severity while preserving specialization.', 'Prioritize urgent claims and adjusters with suitable experience.', 'Reduce overdue work without overloading any adjuster.'],
+                horizon_months: [6, 12, 18],
+              }
+              const sample = Object.fromEntries(Object.entries(samples).map(([key, values]) => [key, values[index]]))
+              const filled = fillNativeAiPreset(tool.fields, sample, formData, { claims, customers }, index)
+              setForms(previous => ({ ...previous, [tab]: filled.values }))
+              setPresetNotice(filled.missing.length ? `Select a real ${filled.missing.join(', ')} before running this analysis.` : 'Example filled. Review before running.')
+            }}>{label}</button>)}
+          </div>
+          {presetNotice && <p role="status">{presetNotice}</p>}
           {tool.fields.map((f) => (
             <div key={f.name} style={{ marginBottom: 14 }}>
               <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>

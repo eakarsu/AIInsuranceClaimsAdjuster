@@ -1,3 +1,4 @@
+import AIReportLibrary from "./components/AIReportLibrary";
 import React, { useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, Link, useNavigate, useLocation } from 'react-router-dom'
 import Login from './pages/Login.jsx'
@@ -77,7 +78,7 @@ function AppContent() {
   const [aiSidebarOpen, setAISidebarOpen] = useState(false)
 
   return (
-    <>
+    <><AIReportLibrary floating /><>
       <Navbar onToggleAI={() => setAISidebarOpen(true)} />
       <Routes>
         <Route path="/insights/timeline" element={<ProtectedRoute><TimelineView /></ProtectedRoute>} />
@@ -130,7 +131,7 @@ function AppContent() {
 
       {/* Floating AI button - visible on all pages when logged in */}
       <AIFloatingButton onClick={() => setAISidebarOpen(true)} />
-    </>
+    </></>
   )
 }
 

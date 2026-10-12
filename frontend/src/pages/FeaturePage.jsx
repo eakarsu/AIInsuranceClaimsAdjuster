@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { fetchItems, createItem, updateItem, deleteItem, runAI } from '../services/api.js'
+import { fetchItems, createItem, updateItem, deleteItem, runAI, recordRows } from '../services/api.js'
 import AIResultDisplay from '../components/AIResultDisplay.jsx'
+import AIReport from '../components/AIReport.jsx'
+import { fillNativeAiPreset } from '../components/nativeAiPresets.js'
 
 function formatMoney(val) {
   if (val === null || val === undefined || val === '') return '-'
@@ -42,6 +44,7 @@ function renderCellValue(value, col) {
 }
 
 function FormModal({ title, fields, initialData, onSubmit, onClose, refData, samples }) {
+  const [presetNotice, setPresetNotice] = useState('')
   const [formData, setFormData] = useState(() => {
     const data = {}
     fields.forEach(f => {
@@ -85,13 +88,18 @@ function FormModal({ title, fields, initialData, onSubmit, onClose, refData, sam
                   key={idx}
                   type="button"
                   className="btn btn-sample"
-                  onClick={() => setFormData(prev => ({ ...prev, ...sample.data }))}
+                  onClick={() => {
+                    const filled = fillNativeAiPreset(fields, sample.data, formData, refData, idx)
+                    setFormData(filled.values)
+                    setPresetNotice(filled.missing.length ? `Select a real ${filled.missing.join(', ')} before running this analysis.` : 'Example filled. Review before running.')
+                  }}
                 >
                   {sample.name}
                 </button>
               ))}
             </div>
           )}
+          {presetNotice && <p role="status">{presetNotice}</p>}
           <div className="modal-body">
             {fields.map(field => (
               <div key={field.key} className="form-group">
@@ -176,6 +184,9 @@ function DetailModal({ item, config, onClose, onEdit, onDelete }) {
             {allKeys.map(key => {
               let val = item[key]
               const isLong = longKeys.some(lk => key.includes(lk))
+              if (['ai_analysis', 'ai_response', 'result_json', 'extracted_data'].includes(key) && val !== null && val !== undefined) {
+                return <div key={key} className="detail-row full-width"><AIReport response={val} title={key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} /></div>
+              }
               // Format display
               let display = val
               if (val === null || val === undefined) display = '-'
@@ -249,7 +260,6 @@ export default function FeaturePage({ config }) {
   const [workflowResult, setWorkflowResult] = useState(null)
 
   useEffect(() => {
-    const extract = (d) => Array.isArray(d) ? d : (d?.data || [])
     Promise.all([
       fetchItems('claims?page=1&limit=100').catch(() => []),
       fetchItems('policies').catch(() => []),
@@ -258,11 +268,11 @@ export default function FeaturePage({ config }) {
       fetchItems('documents').catch(() => []),
     ]).then(([claims, policies, customers, adjusters, documents]) => {
       setRefData({
-        claims: extract(claims),
-        policies: extract(policies),
-        customers: extract(customers),
-        adjusters: extract(adjusters),
-        documents: extract(documents),
+        claims: recordRows(claims),
+        policies: recordRows(policies),
+        customers: recordRows(customers),
+        adjusters: recordRows(adjusters),
+        documents: recordRows(documents),
       })
     })
   }, [])
@@ -282,12 +292,9 @@ export default function FeaturePage({ config }) {
         if (filters.date_to) url += `&date_to=${encodeURIComponent(filters.date_to)}`
       }
       const data = await fetchItems(url)
-      if (data && data.data && data.pagination) {
-        setItems(data.data)
-        setPagination(data.pagination)
-      } else {
-        setItems(Array.isArray(data) ? data : (data.data || []))
-      }
+      setItems(recordRows(data))
+      setPagination(data?.pagination && typeof data.pagination === 'object'
+        ? data.pagination : { page: 1, totalPages: 1, total: recordRows(data).length })
     } catch (err) {
       setError(err.message)
     } finally {

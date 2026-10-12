@@ -399,6 +399,10 @@ export const features = {
       { key: 'time_period', label: 'Time Period', type: 'select', options: ['Next Month', 'Next Quarter', 'Next 6 Months', 'Next Year'] },
       { key: 'historical_context', label: 'Historical Context', type: 'textarea' },
     ],
+    aiSamples: [
+      { name: 'Storm Season', data: { claim_type: 'Property', region: 'Southeast', time_period: 'Next Quarter', historical_context: 'Review recent property claim volume and seasonal storm exposure. Highlight uncertainty where local loss history is unavailable.' } },
+      { name: 'Auto Renewal', data: { claim_type: 'Auto', region: 'Midwest', time_period: 'Next 6 Months', historical_context: 'Assess expected collision and weather-related claim volume around the renewal period. Compare with actual historical counts before planning staffing.' } },
+    ],
     aiLabel: 'Run AI Claims Forecast',
     aiOnly: true,
   },

@@ -23,13 +23,13 @@ export default function ClaimsRoutingRulesEditor() {
       const r = await fetch('/api/custom-views/routing-rules', { headers: { Authorization: `Bearer ${token()}` } })
       const j = await r.json()
       if (!r.ok) throw new Error(j.error || 'Failed to load')
-      setRules(j.data || [])
+      setRules(Array.isArray(j) ? j : (Array.isArray(j?.data) ? j.data : []))
     } catch (e) { setErr(e.message) } finally { setLoading(false) }
   }
 
   useEffect(() => {
     load()
-    fetchItems('adjusters').then(d => setAdjusters(Array.isArray(d) ? d : (d?.data || []))).catch(() => setAdjusters([]))
+    fetchItems('adjusters').then(d => setAdjusters(Array.isArray(d) ? d : (Array.isArray(d?.data) ? d.data : []))).catch(() => setAdjusters([]))
   }, [])
 
   const create = async () => {

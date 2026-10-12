@@ -98,6 +98,14 @@ app.use('/api/gap-no-notifications-module-0-references', route_gap_no_notificati
 app.use('/api/gap-no-websocket-real-time-claim-feed', route_gap_no_websocket_real_time_claim_feed);
 app.use('/api', require('./routes/generatedFeatures').router);
 
+
+// Advisory AI reports only; native execution and approval routes stay unchanged.
+const aiWorkspaceSupport = require("./aiWorkspaceAdapters.cjs");
+const aiWorkspaceDatabase = require("./db.js").pool;
+app.use('/api/report-workspace', require("./aiWorkspace.cjs").createAIWorkspaceRouter({
+  pool: aiWorkspaceDatabase, authenticateToken: require("./middleware/auth.js"),
+  aiRateLimiter: aiWorkspaceSupport.createWorkspaceLimiter(), features: require("./aiWorkspaceFeatures.json"),
+}));
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
