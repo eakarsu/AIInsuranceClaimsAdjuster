@@ -80,6 +80,7 @@ app.use('/api/claim-severity-leakage-audit', require('./routes/claimSeverityLeak
 app.use('/api/governed-claims', require('./middleware/auth'), require('./routes/governedClaims'));
 
 // Custom Views — 2 VIZ + 2 NON-VIZ — mounted BEFORE the 404 catch-all
+app.use('/api/feature-pack', (() => { try { return require('./routes/featurePack').defaultRouter; } catch { return (_req,res)=>res.status(503).json({error:'feature-pack unavailable'}); } })());
 app.use('/api/custom-views', require('./routes/customViews'));
 
 // Health check
